@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PORTAL SIMULASI CPNS 2026 - V11 (Cloud & Email API)</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; }
+        .no-select { user-select: none; -webkit-user-select: none; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .cheat-overlay { display: none; position: fixed; inset: 0; background: rgba(220, 38, 38, 0.98); z-index: 9999; color: white; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 2rem; backdrop-filter: blur(10px); }
+        .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
+        .fade-enter-from, .fade-leave-to { opacity: 0; }
+    </style>
+</head>
+<body class="text-slate-800">
+
+<div id="app" v-cloak class="min-h-screen flex flex-col h-screen overflow-hidden">
+    
+    <Transition name="fade">
+        <div v-if="toast.show" class="fixed top-6 right-6 z-[9999] px-6 py-4 rounded-xl shadow-2xl text-white font-bold flex items-center gap-3 transition-all transform" :class="toast.type === 'error' ? 'bg-rose-600' : toast.type === 'info' ? 'bg-blue-600' : 'bg-emerald-600'">
+            <i :data-lucide="toast.type === 'error' ? 'alert-circle' : toast.type === 'info' ? 'info' : 'check-circle'" class="w-5 h-5"></i>
+            {{ toast.message }}
+        </div>
+    </Transition>
+
+    <div v-if="currentView === 'auth'" class="flex-1 flex items-center justify-center bg-gradient-to-br from-slate-900 to-blue-900 px-4 py-8 relative overflow-y-auto">
+        <div class="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20"></div>
+        <div class="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20"></div>
+
+        <div class="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl w-full max-w-md p-8 z-10 border border-white/20 my-auto">
+            <div class="text-center mb-6">
+                <div class="bg-gradient-to-tr from-blue-600 to-indigo-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/30">
+                    <i data-lucide="laptop" class="text-white w-8 h-8"></i>
+                </div>
+                <h1 class="text-2xl font-extrabold text-slate-800">Portal CPNS 2026</h1>
+                <p class="text-sm text-slate-500 font-medium mt-1">Platform CAT Terintegrasi BKN</p>
+            </div>
+
+            <div v-if="authMode !== 'forgot'" class="flex bg-slate-100 p-1.5 rounded-xl mb-6">
+                <button @click="authRole = 'peserta'; authMode = 'login'" :class="authRole === 'peserta' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'" class="flex-1 py-2.5 text-sm font-bold rounded-lg transition-all">Siswa / Peserta</button>
+                <button @click="authRole = 'admin'; authMode = 'login'" :class="authRole === 'admin' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'" class="flex-1 py-2.5 text-sm font-bold rounded-lg transition-all">Administrator</button>
+            </div>
+
+            <form v-if="authMode === 'login'" @submit.prevent="handleLogin" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Alamat Email</label>
+                    <input type="email" v-model="authForm.email" required class="w-full px-5 py-3.5 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-600 outline-none transition-all font-medium" placeholder="nama@email.com">
+                </div>
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider">Kata Sandi</label>
+                        <button v-if="authRole === 'peserta'" type="button" @click="authMode = 'forgot'" class="text-xs font-bold text-blue-600 hover:underline">Lupa Sandi?</button>
+                    </div>
+                    <input type="password" v-model="authForm.password" required class="w-full px-5 py-3.5 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-600 outline-none transition-all font-medium" placeholder="••••••••">
+                </div>
+                <div v-if="authRole === 'admin'" class="p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
+                    <label class="block text-xs font-bold text-indigo-800 uppercase tracking-wider mb-2 flex items-center gap-2"><i data-lucide="shield-alert" class="w-4 h-4"></i> Kode Keamanan (MFA)</label>
+                    <input type="text" v-model="authForm.mfa" required class="w-full px-5 py-3.5 rounded-xl bg-white border border-indigo-200 focus:ring-2 focus:ring-indigo-600 outline-none transition-all font-black tracking-widest text-center" placeholder="123456" maxlength="6">
+                </div>
+
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex justify-center items-center gap-2 mt-4">
+                    Masuk ke Sistem <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                </button>
+                <div v-if="authRole === 'peserta'" class="text-center mt-6 pt-4 border-t border-slate-100">
+                    <p class="text-sm text-slate-500 font-medium">Belum punya akun? <button type="button" @click="authMode = 'register'" class="text-blue-600 font-bold hover:underline">Daftar Sekarang</button></p>
+                </div>
+            </form>
+
+            <form v-if="authMode === 'register' && authRole === 'peserta'" @submit.prevent="handleRegister" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Nama Lengkap</label>
+                    <input type="text" v-model="regForm.nama" required class="w-full px-5 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-blue-600 outline-none font-medium" placeholder="Sesuai KTP">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">No. WhatsApp</label>
+                    <input type="tel" v-model="regForm.wa" required class="w-full px-5 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-blue-600 outline-none font-medium" placeholder="08123456789">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Alamat Email</label>
+                    <input type="email" v-model="regForm.email" required class="w-full px-5 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-blue-600 outline-none font-medium" placeholder="nama@email.com">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Buat Kata Sandi</label>
+                    <input type="password" v-model="regForm.password" required class="w-full px-5 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-blue-600 outline-none font-medium" placeholder="••••••••">
+                </div>
+                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 rounded-xl shadow-lg flex justify-center items-center gap-2 mt-4">
+                    Buat Akun Peserta <i data-lucide="user-plus" class="w-5 h-5"></i>
+                </button>
+                <div class="text-center mt-6 pt-4 border-t border-slate-100">
+                    <p class="text-sm text-slate-500 font-medium">Sudah punya akun? <button type="button" @click="authMode = 'login'" class="text-blue-600 font-bold hover:underline">Masuk di sini</button></p>
+                </div>
+            </form>
+
+            <form v-if="authMode === 'forgot'" @submit.prevent="handleForgotPassword" class="space-y-4">
+                <div class="text-center mb-4">
+                    <div class="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-2"><i data-lucide="unlock" class="w-6 h-6"></i></div>
+                    <h3 class="font-bold text-slate-800 text-lg">Lupa Kata Sandi?</h3>
+                    <p class="text-xs text-slate-500 mt-1">Masukkan email terdaftar Anda. Kami akan mengirimkan password sementara.</p>
+                </div>
+                <div>
+                    <input type="email" v-model="forgotEmail" required class="w-full px-5 py-3.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-blue-600 outline-none font-medium text-center" placeholder="Ketik Email Anda...">
+                </div>
+                <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-4 rounded-xl shadow-lg flex justify-center items-center gap-2">
+                    Kirim Sandi Sementara <i data-lucide="send" class="w-5 h-5"></i>
+                </button>
+                <div class="text-center mt-6 pt-4 border-t border-slate-100">
+                    <button type="button" @click="authMode = 'login'" class="text-slate-500 text-sm font-bold hover:underline"><i data-lucide="arrow-left" class="w-4 h-4 inline align-middle"></i> Kembali ke Login</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div v-if="currentView === 'admin'" class="flex h-screen bg-slate-50 w-full">
+        <aside class="w-72 bg-slate-900 text-slate-300 flex flex-col shadow-2xl transition-all z-20 shrink-0" :class="isSidebarOpen ? 'ml-0 absolute lg:relative h-full' : '-ml-72 lg:ml-0 hidden lg:flex'">
+            <div class="p-6 border-b border-slate-800 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-blue-600/20 rounded-lg"><i data-lucide="shield-check" class="text-blue-500 w-6 h-6"></i></div>
+                    <div><h2 class="font-bold text-white">Admin CPNS</h2><p class="text-xs text-slate-400">Control Panel</p></div>
+                </div>
+                <button @click="isSidebarOpen = false" class="lg:hidden text-slate-400 hover:text-white"><i data-lucide="x"></i></button>
+            </div>
+            
+            <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
+                <button @click="adminMenu = 'dashboard'" :class="adminMenu === 'dashboard' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold transition-all">
+                    <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Ikhtisar Analitik
+                </button>
+                <button @click="adminMenu = 'bank_soal'" :class="adminMenu === 'bank_soal' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold transition-all">
+                    <i data-lucide="database" class="w-5 h-5"></i> Manajemen Bank Soal
+                </button>
+                <button @click="adminMenu = 'peserta'" :class="adminMenu === 'peserta' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold transition-all">
+                    <i data-lucide="users" class="w-5 h-5"></i> Data Peserta
+                </button>
+                <button @click="adminMenu = 'pembayaran'" :class="adminMenu === 'pembayaran' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold transition-all">
+                    <i data-lucide="credit-card" class="w-5 h-5"></i> Info Pembayaran
+                </button>
+            </nav>
+            <div class="p-4 border-t border-slate-800">
+                <button @click="logout" class="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-rose-500/10 text-rose-400 rounded-xl font-semibold transition-all">
+                    <i data-lucide="log-out" class="w-5 h-5"></i> Keluar
+                </button>
+            </div>
+        </aside>
+
+        <main class="flex-1 flex flex-col h-screen overflow-hidden">
+            <header class="bg-white px-8 py-5 flex items-center gap-4 border-b border-slate-200 shrink-0">
+                <button @click="isSidebarOpen = !isSidebarOpen" class="lg:hidden text-slate-500"><i data-lucide="menu"></i></button>
+                <h1 class="text-xl font-extrabold text-slate-800 flex-1">
+                    {{ adminMenu === 'dashboard' ? 'Ikhtisar & Statistik' : adminMenu === 'bank_soal' ? 'Manajemen Bank Soal' : adminMenu === 'peserta' ? 'Data Peserta & Riwayat Pembelian' : 'Instruksi Pembayaran' }}
+                </h1>
+                <div class="hidden md:flex bg-emerald-50 rounded-full px-4 py-2 text-sm font-bold text-emerald-600 border border-emerald-100">State Auto-Saved <i data-lucide="check-circle-2" class="w-4 h-4 ml-2 inline"></i></div>
+            </header>
+
+            <div id="adminScrollArea" class="flex-1 overflow-y-auto p-8 bg-slate-50/50 scroll-smooth">
+                
+                <div v-if="adminMenu === 'dashboard'" class="max-w-7xl mx-auto space-y-8">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-5">
+                            <div class="w-14 h-14 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center"><i data-lucide="users" class="w-7 h-7"></i></div>
+                            <div><p class="text-sm text-slate-500 font-bold">Total Peserta</p><h3 class="text-2xl font-black text-slate-800">{{ statsAdmin.totalPeserta }}</h3></div>
+                        </div>
+                        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-5">
+                            <div class="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center"><i data-lucide="check-square" class="w-7 h-7"></i></div>
+                            <div><p class="text-sm text-slate-500 font-bold">Ujian Selesai</p><h3 class="text-2xl font-black text-slate-800">{{ statsAdmin.totalUjian }}</h3></div>
+                        </div>
+                        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-5">
+                            <div class="w-14 h-14 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center"><i data-lucide="trending-up" class="w-7 h-7"></i></div>
+                            <div><p class="text-sm text-slate-500 font-bold">Tingkat Lulus</p><h3 class="text-2xl font-black text-slate-800">{{ statsAdmin.passRate }}%</h3></div>
+                        </div>
+                        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-5">
+                            <div class="w-14 h-14 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center"><i data-lucide="book-open" class="w-7 h-7"></i></div>
+                            <div><p class="text-sm text-slate-500 font-bold">Modul Published</p><h3 class="text-2xl font-black text-slate-800">{{ db.bankSoal.filter(b=>b.status==='published').length }}</h3></div>
+                        </div>
+                    </div>
+                    <div class="bg-indigo-900 rounded-2xl shadow-lg border border-indigo-800 p-8 text-white relative overflow-hidden">
+                        <div class="absolute right-0 top-0 opacity-10 transform translate-x-1/4 -translate-y-1/4"><i data-lucide="database-backup" class="w-64 h-64"></i></div>
+                        <div class="relative z-10">
+                            <h3 class="text-2xl font-black mb-2 flex items-center gap-3"><i data-lucide="hard-drive" class="w-7 h-7 text-indigo-300"></i> Cloud Sync & Migration Panel</h3>
+                            <p class="text-indigo-200 mb-8 max-w-2xl text-sm font-medium leading-relaxed">Gunakan fitur ini untuk mencadangkan data Cloud ke komputer Anda, atau mengunggah data soal lama ke MongoDB Cloud.</p>
+                            <div class="flex flex-col sm:flex-row gap-4">
+                                <button @click="exportDatabase" class="px-6 py-4 bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-black rounded-xl shadow-lg transition-all flex items-center justify-center gap-3">
+                                    <i data-lucide="download-cloud" class="w-5 h-5"></i> Export Semua Data (JSON)
+                                </button>
+                                <label class="px-6 py-4 bg-indigo-700 hover:bg-indigo-600 text-white font-black rounded-xl shadow-lg transition-all flex items-center justify-center gap-3 cursor-pointer border border-indigo-500">
+                                    <i data-lucide="upload-cloud" class="w-5 h-5"></i> Import & Upload ke MongoDB Cloud
+                                    <input type="file" accept=".json" @change="importDatabase" class="hidden">
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="adminMenu === 'bank_soal'" class="max-w-7xl mx-auto space-y-6">
+                    <div v-if="!activeBankSoal" class="space-y-6">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-200 gap-4">
+                            <div>
+                                <h2 class="text-xl font-black text-slate-800">Daftar Bank Soal</h2>
+                                <p class="text-sm text-slate-500 font-medium">Buat dan kelola paket modul tryout berkapasitas 110 soal di sini.</p>
+                            </div>
+                            <button @click="createNewBankSoal" class="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg flex items-center justify-center gap-3">
+                                <i data-lucide="folder-plus" class="w-5 h-5"></i> Tambah Bank Soal Baru
+                            </button>
+                        </div>
+                        <div v-if="db.bankSoal.length === 0" class="text-center py-20 bg-white rounded-2xl border border-slate-200">
+                            <i data-lucide="folder-open" class="w-20 h-20 text-slate-200 mx-auto mb-4"></i>
+                            <h3 class="text-xl font-bold text-slate-600 mb-1">Belum Ada Bank Soal</h3>
+                        </div>
+                        <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <div v-for="bank in db.bankSoal" :key="bank.id" class="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col relative hover:shadow-lg transition-shadow">
+                                <div class="absolute top-4 right-4 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest" :class="bank.status === 'published' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'">{{ bank.status === 'published' ? 'Published' : 'Draft' }}</div>
+                                <div class="mb-4">
+                                    <span class="text-xs font-bold text-slate-400 uppercase">{{ bank.id }}</span>
+                                    <h3 class="text-xl font-extrabold text-slate-800 mt-1 truncate">{{ bank.nama }}</h3>
+                                </div>
+                                <div class="space-y-2 mb-6 flex-1 text-sm text-slate-600 font-medium">
+                                    <div><i data-lucide="file-question" class="w-4 h-4 inline mr-2 text-slate-400"></i> <b class="text-slate-800">{{ bank.soal.length }}/110</b> Soal Terinput</div>
+                                    <div><i data-lucide="clock" class="w-4 h-4 inline mr-2 text-slate-400"></i> Durasi: <b class="text-slate-800">{{ bank.waktu }}</b> Menit</div>
+                                </div>
+                                <button @click="openBankSoal(bank.id)" class="w-full bg-slate-900 hover:bg-blue-600 text-white font-bold py-3 rounded-xl text-sm transition-all flex items-center justify-center gap-2"><i data-lucide="edit-3" class="w-4 h-4"></i> Kelola & Edit Soal</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div v-else class="max-w-5xl mx-auto space-y-6 pb-20">
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200">
+                            <div class="flex items-center gap-4 flex-1">
+                                <button @click="activeBankSoal = null" class="p-3 hover:bg-slate-200 rounded-xl text-slate-700 bg-slate-100 border transition-all flex items-center gap-2 font-bold group">
+                                    <i data-lucide="arrow-left" class="w-5 h-5 group-hover:-translate-x-1 transition-transform"></i> <span class="hidden sm:inline">Daftar Bank Soal</span>
+                                </button>
+                                <div class="flex-1">
+                                    <label class="text-[10px] font-bold text-slate-400 uppercase block mb-1">Nama Modul</label>
+                                    <input v-model="activeBankSoal.nama" class="text-xl md:text-2xl font-black text-slate-800 outline-none w-full border-b-2 border-transparent focus:border-blue-500 bg-transparent">
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3 border-t md:border-t-0 pt-4 md:pt-0 md:pl-6 md:border-l">
+                                <div class="mr-2">
+                                    <label class="text-[10px] font-bold text-slate-400 uppercase block mb-1">Durasi</label>
+                                    <input type="number" v-model.number="activeBankSoal.waktu" class="w-20 px-3 py-2 bg-slate-50 border rounded-xl outline-none text-center font-bold text-sm">
+                                </div>
+                                <button @click="setBankStatus('draft')" :class="activeBankSoal.status === 'draft' ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-slate-50 text-slate-500 hover:bg-slate-100 border-slate-200'" class="px-4 py-2 font-bold rounded-xl text-sm border flex items-center gap-2 transition-colors">
+                                    <i data-lucide="archive" class="w-4 h-4"></i> Draft
+                                </button>
+                                <button @click="setBankStatus('published')" :class="activeBankSoal.status === 'published' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/30' : 'bg-slate-50 text-slate-500 hover:bg-slate-100 border-slate-200'" class="px-4 py-2 font-bold rounded-xl text-sm border flex items-center gap-2 transition-all">
+                                    <i data-lucide="send" class="w-4 h-4"></i> Publish
+                                </button>
+                            </div>
+                        </div>
+                        <div class="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 relative">
+                            <h3 class="font-extrabold text-slate-800 mb-6 flex items-center justify-between border-b border-slate-100 pb-4">
+                                <span class="flex items-center gap-3"><i data-lucide="file-plus" class="w-6 h-6 text-blue-500"></i> {{ isEditing ? 'Edit Pertanyaan (Mode Perubahan)' : 'Form Tambah Pertanyaan' }}</span>
+                                <button v-if="isEditing" @click="batalEdit" class="text-xs bg-rose-50 text-rose-600 px-3 py-1.5 rounded-lg font-bold hover:bg-rose-100 flex items-center gap-1"><i data-lucide="x" class="w-3 h-3"></i> Batal Edit</button>
+                            </h3>
+                            <div v-if="formSoal" class="space-y-6">
+                                <div class="flex items-center gap-4 bg-blue-50/50 border border-blue-100 p-4 rounded-xl">
+                                    <div class="w-16 h-16 bg-white border-2 border-blue-200 text-blue-700 rounded-2xl flex flex-col items-center justify-center shadow-sm">
+                                        <span class="text-[10px] font-bold text-blue-400 uppercase leading-none mb-1">No</span>
+                                        <span class="text-2xl font-black leading-none">{{ formSoal.nomor }}</span>
+                                    </div>
+                                    <div>
+                                        <span class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Kategori Auto-Detect</span>
+                                        <span class="inline-block px-3 py-1 bg-blue-600 text-white text-sm font-black rounded-lg tracking-wider">{{ formSoal.jenis }}</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Teks Pertanyaan</label>
+                                    <textarea v-model="formSoal.teks" rows="4" class="w-full px-5 py-4 bg-slate-50 border rounded-xl outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 font-medium"></textarea>
+                                </div>
+                                <div class="space-y-4">
+                                    <label class="block text-xs font-bold text-slate-500 uppercase mb-2 flex justify-between"><span>Opsi & Pembobotan</span></label>
+                                    <div v-for="opt in ['A','B','C','D','E']" :key="opt" class="flex gap-3 md:gap-4 items-center">
+                                        <span class="w-10 h-10 flex shrink-0 items-center justify-center font-black text-slate-600 bg-slate-100 rounded-xl">{{ opt }}</span>
+                                        <input type="text" v-model="formSoal.pilihan[opt]" class="flex-1 px-4 py-3 bg-white border rounded-xl outline-none">
+                                        <div class="relative w-20 md:w-24 shrink-0">
+                                            <input type="number" v-model.number="formSoal.bobot[opt]" class="w-full px-2 py-3 bg-emerald-50 border-emerald-200 rounded-xl font-black text-emerald-700 text-center" min="0" max="5">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="pt-4 flex justify-end">
+                                    <button @click="simpanSoal" class="px-8 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg flex items-center gap-2">
+                                        <i data-lucide="check-circle" class="w-5 h-5"></i> {{ isEditing ? 'Simpan Perubahan' : 'Tambahkan Pertanyaan' }}
+                                    </button>
+                                </div>
+                            </div>
+                            <div v-else class="text-center py-10 bg-emerald-50 rounded-xl border border-emerald-100">
+                                <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4"><i data-lucide="check-check" class="w-8 h-8"></i></div>
+                                <h3 class="text-xl font-black text-emerald-800 mb-2">Bank Soal Telah Penuh</h3>
+                            </div>
+                        </div>
+                        <div class="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
+                            <h3 class="font-extrabold text-slate-800 mb-6 border-b border-slate-100 pb-4 flex justify-between items-center">
+                                <span>Daftar Pertanyaan Tersimpan</span>
+                                <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-lg text-sm">{{ activeBankSoal.soal.length }} / 110</span>
+                            </h3>
+                            <div class="space-y-3">
+                                <div v-for="s in sortedSoal" :key="s.nomor" class="p-4 border rounded-xl bg-slate-50 flex justify-between items-start group" :class="{'ring-2 ring-blue-400 bg-blue-50': isEditing && formSoal?.nomor === s.nomor}">
+                                    <div class="flex-1">
+                                        <span class="inline-block px-2.5 py-1 bg-slate-800 text-white text-[10px] font-black uppercase tracking-wider rounded mb-2">NO. {{ s.nomor }} | {{ s.jenis }}</span>
+                                        <p class="text-sm font-semibold text-slate-800 line-clamp-2">{{ s.teks }}</p>
+                                    </div>
+                                    <div class="flex gap-2 ml-4 shrink-0">
+                                        <button @click="editSoal(s)" class="text-blue-600 hover:bg-blue-200 p-2 rounded-lg bg-blue-50 transition-colors"><i data-lucide="edit-3" class="w-5 h-5"></i></button>
+                                        <button @click="hapusSoal(s.nomor)" class="text-rose-600 hover:bg-rose-200 p-2 rounded-lg bg-rose-50 transition-colors"><i data-lucide="trash" class="w-5 h-5"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div v-if="adminMenu === 'peserta'" class="max-w-7xl mx-auto space-y-6">
+                    <div class="bg-white rounded-3xl border border-slate-200 p-6 md:p-8 shadow-sm">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-100 pb-4 mb-6 gap-4">
+                            <h3 class="font-black text-slate-800 text-xl flex items-center gap-3">
+                                <i data-lucide="users" class="w-6 h-6 text-blue-600"></i> Database Peserta Terdaftar
+                            </h3>
+                            <button @click="exportPesertaCSV" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold px-4 py-2 rounded-xl text-sm border border-emerald-200 transition-all flex items-center gap-2">
+                                <i data-lucide="download" class="w-4 h-4"></i> Unduh Data (CSV)
+                            </button>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse text-sm">
+                                <thead class="bg-slate-50 text-slate-500 uppercase font-bold text-xs tracking-wider border-b border-slate-200">
+                                    <tr>
+                                        <th class="px-6 py-4">Info Peserta</th>
+                                        <th class="px-6 py-4 text-center">Token Dibeli</th>
+                                        <th class="px-6 py-4 text-center">Ujian Selesai</th>
+                                        <th class="px-6 py-4 text-center">Rata-rata Skor</th>
+                                        <th class="px-6 py-4 text-center">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-if="tablePeserta.length === 0"><td colspan="5" class="px-6 py-10 text-center text-slate-400">Belum ada peserta yang mendaftar.</td></tr>
+                                    <template v-for="user in tablePeserta" :key="user.email">
+                                        <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors" :class="{'bg-slate-50': expandedUser === user.email}">
+                                            <td class="px-6 py-4">
+                                                <div class="font-extrabold text-slate-800 text-base mb-1">{{ user.nama || user.email.split('@')[0] }}</div>
+                                                <div class="text-xs text-slate-500 flex items-center gap-2 mb-1">
+                                                    <i data-lucide="mail" class="w-3 h-3"></i> {{ user.email }}
+                                                    <span class="text-slate-300">|</span>
+                                                    <i data-lucide="phone" class="w-3 h-3"></i> {{ user.wa || '-' }}
+                                                </div>
+                                                <div class="text-[11px] font-medium text-slate-400 flex items-center gap-1">
+                                                    <i data-lucide="lock" class="w-3 h-3"></i> Password: <span class="font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{{ user.password }}</span>
+                                                </div>
+                                            </td>
+                                            <td class="px-6 py-4 text-center font-black text-slate-700 text-lg">{{ user.purchasedCount }}</td>
+                                            <td class="px-6 py-4 text-center font-black text-blue-600 text-lg">{{ user.usedCount }}</td>
+                                            <td class="px-6 py-4 font-black text-center text-lg text-emerald-600">{{ user.avgScore || '-' }}</td>
+                                            <td class="px-6 py-4 text-center">
+                                                <button @click="expandedUser = expandedUser === user.email ? null : user.email" class="bg-white border-2 border-slate-200 hover:border-blue-500 text-slate-700 hover:text-blue-600 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 mx-auto">
+                                                    {{ expandedUser === user.email ? 'Tutup Detail' : 'Lihat Detail' }}
+                                                    <i :data-lucide="expandedUser === user.email ? 'chevron-up' : 'chevron-down'" class="w-4 h-4"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr v-if="expandedUser === user.email" class="bg-slate-100/50 border-b-2 border-slate-200">
+                                            <td colspan="5" class="px-6 py-8">
+                                                <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+                                                    <h4 class="font-extrabold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3">
+                                                        <i data-lucide="activity" class="w-5 h-5 text-indigo-600"></i> Riwayat Transaksi & Ujian
+                                                    </h4>
+                                                    <div v-if="user.tokens.length === 0" class="text-slate-400 text-sm italic py-4 text-center bg-slate-50 rounded-xl">Peserta belum melakukan pembelian token apapun.</div>
+                                                    <div v-else class="overflow-x-auto">
+                                                        <table class="w-full text-left text-xs">
+                                                            <thead class="text-slate-500 uppercase font-bold border-b border-slate-200">
+                                                                <tr><th class="py-3 px-2">Kode Token</th><th class="py-3 px-2">Status Pembelian</th><th class="py-3 px-2">Status Penggunaan</th><th class="py-3 px-2">Modul Dikerjakan</th><th class="py-3 px-2">Waktu Submit</th><th class="py-3 px-2 text-right">Skor Akhir</th></tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                <tr v-for="t in user.tokens" :key="t.code" class="border-b border-slate-100 border-dashed hover:bg-slate-50">
+                                                                    <td class="py-3 px-2 font-mono font-bold text-indigo-600 text-sm">{{ t.code }}</td>
+                                                                    <td class="py-3 px-2"><span class="bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-bold uppercase tracking-wider text-[10px] flex items-center gap-1 w-max"><i data-lucide="check" class="w-3 h-3"></i> Berhasil</span></td>
+                                                                    <td class="py-3 px-2"><span :class="t.status === 'used' ? 'bg-slate-100 text-slate-600' : 'bg-amber-100 text-amber-700'" class="px-2 py-1 rounded font-bold uppercase tracking-wider text-[10px] w-max inline-block">{{ t.status === 'used' ? 'Sudah Dipakai' : 'Belum Dipakai' }}</span></td>
+                                                                    <td class="py-3 px-2 font-bold text-slate-700">{{ t.status === 'used' ? getBankName(t.bankSoalId) : '-' }}</td>
+                                                                    <td class="py-3 px-2 text-slate-500 font-medium">{{ t.usedAt ? new Date(t.usedAt).toLocaleString('id-ID', {day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'}) : '-' }}</td>
+                                                                    <td class="py-3 px-2 text-right font-black text-base" :class="t.result?.isPassed ? 'text-emerald-600' : 'text-rose-600'">{{ t.result ? t.result.totalScore : '-' }}</td>
+                                                                </tr>
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="adminMenu === 'pembayaran'" class="max-w-4xl mx-auto">
+                    <div class="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
+                        <h2 class="text-2xl font-black text-slate-800 mb-2">Instruksi Pembayaran (Preview)</h2>
+                        <div class="bg-slate-50 rounded-2xl border-2 border-slate-200 p-6 md:p-10 relative overflow-hidden pointer-events-none">
+                            <div class="text-center mb-8">
+                                <span class="bg-blue-100 text-blue-700 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest mb-4 inline-block">Harga Tiket Ujian</span>
+                                <h1 class="text-4xl md:text-5xl font-black text-slate-800">Rp 15.000</h1>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
+                                <div class="bg-white p-6 rounded-xl border flex items-center gap-4">
+                                    <div class="w-14 h-14 bg-purple-100 text-purple-600 rounded-xl flex items-center justify-center font-black italic text-xl">OVO</div>
+                                    <div><p class="text-xs text-slate-500 font-bold uppercase mb-1">Transfer OVO</p><p class="text-lg font-black text-slate-800">087760108585</p><p class="text-xs text-slate-500">a.n Aldy Raenaldy</p></div>
+                                </div>
+                                <div class="bg-white p-6 rounded-xl border flex items-center gap-4">
+                                    <div class="w-14 h-14 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center font-black italic text-xl">GPY</div>
+                                    <div><p class="text-xs text-slate-500 font-bold uppercase mb-1">Transfer GOPAY</p><p class="text-lg font-black text-slate-800">087760108585</p><p class="text-xs text-slate-500">a.n Aldy Raenaldy</p></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <div v-if="currentView === 'peserta_dashboard'" class="flex h-screen bg-slate-50 w-full">
+        <aside class="w-72 bg-white border-r flex flex-col z-20 shrink-0" :class="isSidebarOpen ? 'ml-0 absolute lg:relative h-full shadow-2xl' : '-ml-72 lg:ml-0 hidden lg:flex'">
+            <div class="p-6 border-b flex items-center justify-between">
+                <div><h2 class="font-black text-slate-800">CPNS Portal</h2><span class="text-[10px] font-bold text-slate-400 uppercase block">Peserta Area</span></div>
+                <button @click="isSidebarOpen = false" class="lg:hidden text-slate-400"><i data-lucide="x"></i></button>
+            </div>
+            <nav class="flex-1 p-5 space-y-2">
+                <button @click="pesertaMenu = 'beranda'" :class="pesertaMenu === 'beranda' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 font-semibold hover:bg-slate-50'" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all"><i data-lucide="home" class="w-5 h-5"></i> Beranda Saya</button>
+                <button @click="pesertaMenu = 'katalog'" :class="pesertaMenu === 'katalog' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 font-semibold hover:bg-slate-50'" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all"><i data-lucide="shopping-bag" class="w-5 h-5"></i> Katalog Tryout</button>
+                <button @click="pesertaMenu = 'pembayaran'" :class="pesertaMenu === 'pembayaran' ? 'bg-emerald-50 text-emerald-700 font-bold ring-1 ring-emerald-200' : 'text-slate-500 font-semibold hover:bg-slate-50'" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all relative"><i data-lucide="credit-card" class="w-5 h-5"></i> Beli Token Ujian</button>
+                <button @click="pesertaMenu = 'riwayat'" :class="pesertaMenu === 'riwayat' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 font-semibold hover:bg-slate-50'" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all"><i data-lucide="history" class="w-5 h-5"></i> Riwayat Hasil</button>
+                <button @click="pesertaMenu = 'profil'" :class="pesertaMenu === 'profil' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 font-semibold hover:bg-slate-50'" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all mt-4 border-t pt-4"><i data-lucide="user" class="w-5 h-5"></i> Profil & Sandi</button>
+            </nav>
+            <div class="p-5 border-t">
+                <div class="bg-slate-50 p-4 rounded-xl flex items-center gap-3 mb-4 border overflow-hidden">
+                    <div>
+                        <p class="text-sm font-bold text-slate-800 truncate">{{ currentUser?.nama || currentUser?.email.split('@')[0] }}</p>
+                        <p class="text-[10px] text-slate-500 truncate">{{ currentUser?.email }}</p>
+                    </div>
+                </div>
+                <button @click="logout" class="w-full py-3 text-rose-500 hover:bg-rose-50 font-bold rounded-xl">Keluar Akun</button>
+            </div>
+        </aside>
+
+        <main class="flex-1 overflow-y-auto bg-slate-50 p-6 md:p-8">
+            <div class="flex items-center gap-4 mb-8">
+                <button @click="isSidebarOpen = true" class="lg:hidden text-slate-500"><i data-lucide="menu"></i></button>
+                <h1 class="text-2xl font-black text-slate-800">
+                    {{ pesertaMenu === 'beranda' ? 'Selamat Datang!' : pesertaMenu === 'katalog' ? 'Katalog Simulasi CAT' : pesertaMenu === 'pembayaran' ? 'Pembayaran Tiket Ujian' : pesertaMenu === 'profil' ? 'Pengaturan Profil' : 'Riwayat Anda' }}
+                </h1>
+            </div>
+            
+            <div v-if="pesertaMenu === 'beranda'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                 <div class="bg-white p-6 rounded-2xl border shadow-sm flex items-center gap-4">
+                     <div class="w-14 h-14 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center"><i data-lucide="pen-tool"></i></div>
+                     <div><p class="text-sm font-bold text-slate-500">Ujian Selesai</p><h3 class="text-2xl font-black">{{ statsPeserta.totalExams }} Kali</h3></div>
+                 </div>
+                 <div class="bg-white p-6 rounded-2xl border shadow-sm flex items-center gap-4">
+                     <div class="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center"><i data-lucide="target"></i></div>
+                     <div><p class="text-sm font-bold text-slate-500">Skor Tertinggi</p><h3 class="text-2xl font-black">{{ statsPeserta.bestScore }} Poin</h3></div>
+                 </div>
+                 <div class="bg-gradient-to-tr from-indigo-700 to-blue-800 p-6 rounded-2xl shadow-lg text-white">
+                     <div class="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center"><i data-lucide="key" class="w-7 h-7"></i></div>
+                     <div><p class="text-sm font-medium text-blue-100">Token Dimiliki</p><h3 class="text-2xl font-black">{{ availableTokensCount }} Token</h3></div>
+                 </div>
+            </div>
+
+            <div v-if="pesertaMenu === 'profil'" class="max-w-2xl">
+                <div class="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm">
+                    <h3 class="font-bold text-slate-800 text-lg mb-6 border-b pb-4">Data Pribadi</h3>
+                    <div class="space-y-4 mb-8">
+                        <div><label class="text-xs font-bold text-slate-400 uppercase">Nama Lengkap</label><p class="font-bold text-slate-800 text-lg">{{ currentUser?.nama }}</p></div>
+                        <div><label class="text-xs font-bold text-slate-400 uppercase">Email</label><p class="font-bold text-slate-800 text-lg">{{ currentUser?.email }}</p></div>
+                        <div><label class="text-xs font-bold text-slate-400 uppercase">Nomor WhatsApp</label><p class="font-bold text-slate-800 text-lg">{{ currentUser?.wa || '-' }}</p></div>
+                    </div>
+                    <h3 class="font-bold text-slate-800 text-lg mb-6 border-b pb-4 flex items-center gap-2"><i data-lucide="lock" class="w-5 h-5 text-amber-500"></i> Ubah Kata Sandi</h3>
+                    <form @submit.prevent="changePassword" class="space-y-4">
+                        <div><label class="block text-xs font-bold text-slate-600 uppercase mb-2">Password Lama</label><input type="password" v-model="profileForm.oldPass" required class="w-full px-5 py-3 rounded-xl bg-slate-50 border"></div>
+                        <div><label class="block text-xs font-bold text-slate-600 uppercase mb-2">Password Baru</label><input type="password" v-model="profileForm.newPass" required class="w-full px-5 py-3 rounded-xl bg-slate-50 border"></div>
+                        <button type="submit" class="bg-blue-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg">Simpan Password Baru</button>
+                    </form>
+                </div>
+            </div>
+
+            <div v-if="pesertaMenu === 'pembayaran'" class="max-w-4xl">
+                <div class="bg-white rounded-3xl border border-slate-200 p-6 md:p-10 shadow-sm relative overflow-hidden">
+                    <div class="text-center mb-10">
+                        <span class="bg-blue-100 text-blue-700 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest mb-4 inline-block">Harga Tiket TryOut (1 Token)</span>
+                        <h1 class="text-4xl md:text-6xl font-black text-slate-800">Rp 15.000</h1>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto mb-10">
+                        <div class="bg-slate-50 p-6 rounded-2xl border flex items-center gap-4">
+                            <div class="w-14 h-14 bg-purple-600 text-white rounded-xl flex items-center justify-center font-black italic text-xl">OVO</div>
+                            <div><p class="text-xs text-slate-500 font-bold uppercase mb-1">Transfer OVO</p><p class="text-lg font-black text-slate-800">087760108585</p><p class="text-xs text-slate-500 font-medium">a.n Aldy Raenaldy</p></div>
+                        </div>
+                        <div class="bg-slate-50 p-6 rounded-2xl border flex items-center gap-4">
+                            <div class="w-14 h-14 bg-blue-500 text-white rounded-xl flex items-center justify-center font-black italic text-xl">GPY</div>
+                            <div><p class="text-xs text-slate-500 font-bold uppercase mb-1">Transfer GOPAY</p><p class="text-lg font-black text-slate-800">087760108585</p><p class="text-xs text-slate-500 font-medium">a.n Aldy Raenaldy</p></div>
+                        </div>
+                    </div>
+                    <div class="text-center"><button @click="simulatePayment" class="px-8 py-4 bg-slate-900 text-white font-bold rounded-xl flex items-center gap-3 mx-auto"><i data-lucide="zap" class="text-amber-400"></i> SIMULASI: Bayar & Terima Token</button></div>
+                </div>
+                <div v-if="myUnusedTokens.length > 0" class="mt-8">
+                    <h3 class="font-bold text-slate-800 mb-4">Token Anda yang Siap Digunakan:</h3>
+                    <div class="flex flex-wrap gap-3"><div v-for="t in myUnusedTokens" :key="t.code" class="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-2 rounded-lg font-mono font-black tracking-widest flex items-center gap-2"><i data-lucide="key" class="w-4 h-4"></i> {{ t.code }}</div></div>
+                </div>
+            </div>
+
+            <div v-if="pesertaMenu === 'katalog'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div v-if="publishedBanks.length === 0" class="col-span-full py-20 text-center text-slate-400">Belum ada Bank Soal yang dipublish.</div>
+                <div v-for="bank in publishedBanks" :key="bank.id" class="bg-white rounded-2xl border shadow-sm p-6 flex flex-col">
+                    <h3 class="text-lg font-black mb-2">{{ bank.nama }}</h3>
+                    <p class="text-xs font-bold text-slate-500 mb-6 flex-1">{{ bank.soal.length }} Soal | {{ bank.waktu }} Menit</p>
+                    <button @click="openTokenModal(bank)" class="w-full py-3 bg-blue-600 text-white font-bold rounded-xl flex justify-center items-center gap-2"><i data-lucide="unlock" class="w-4 h-4"></i> Gunakan Token</button>
+                </div>
+            </div>
+
+            <div v-if="pesertaMenu === 'riwayat'" class="bg-white rounded-2xl border shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead class="bg-slate-50 text-slate-500 uppercase font-bold text-xs tracking-wider">
+                            <tr><th class="px-6 py-4">Modul Ujian</th><th class="px-6 py-4">Token Digunakan</th><th class="px-6 py-4 text-center">Skor Total</th><th class="px-6 py-4 text-center">Status</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr v-if="myUsedTokens.length === 0"><td colspan="4" class="px-6 py-8 text-center text-slate-400">Belum ada riwayat ujian yang selesai.</td></tr>
+                            <tr v-for="token in myUsedTokens" :key="token.code" class="border-b">
+                                <td class="px-6 py-4 font-bold text-slate-800">{{ getBankName(token.bankSoalId) }}</td>
+                                <td class="px-6 py-4 font-mono text-slate-500 text-xs">{{ token.code }}</td>
+                                <td class="px-6 py-4 font-black text-blue-600 text-lg text-center">{{ token.result.totalScore }}</td>
+                                <td class="px-6 py-4 font-bold text-center"><span class="px-3 py-1 rounded-full text-[10px] uppercase font-black tracking-widest" :class="token.result.isPassed ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'">{{ token.result.isPassed ? 'LULUS' : 'GAGAL' }}</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+
+        <div v-if="showTokenModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-3xl p-8 max-w-sm w-full relative shadow-2xl">
+                <button @click="showTokenModal = false" class="absolute top-4 right-4 text-slate-400"><i data-lucide="x"></i></button>
+                <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4"><i data-lucide="key" class="w-8 h-8"></i></div>
+                <h3 class="text-xl font-black text-center mb-1">Buka Gembok Modul</h3>
+                <p class="text-xs text-center text-slate-500 mb-6">Modul: <b>{{ activeBankForToken?.nama }}</b></p>
+                <form @submit.prevent="aksesUjian">
+                    <input type="text" v-model="inputToken" placeholder="KODE TOKEN..." class="w-full px-5 py-4 bg-slate-50 border-2 rounded-xl text-center font-black text-xl uppercase mb-4 tracking-widest">
+                    <button type="submit" class="w-full py-4 bg-blue-600 text-white font-bold rounded-xl text-lg shadow-lg">Mulai Ujian Sekarang</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div v-if="currentView === 'peserta_exam'" class="flex flex-col h-screen bg-slate-100 no-select">
+        <div id="cheatWarning" class="cheat-overlay">
+            <h1 class="text-4xl font-black mb-3 text-white">PELANGGARAN TERDETEKSI</h1>
+            <p class="text-xl mb-8">Anda meninggalkan tab halaman ujian.</p>
+            <p class="text-3xl font-black text-rose-300 mb-8">{{ cheatCount }} / 3 Pelanggaran</p>
+            <button @click="dismissCheatWarning" class="px-10 py-4 bg-white text-rose-600 font-black rounded-xl">Kembali ke Ujian</button>
+        </div>
+
+        <header class="bg-slate-900 text-white flex justify-between items-center px-6 py-3 shadow-lg shrink-0 z-10">
+            <div class="flex items-center gap-4">
+                <div class="p-2 bg-emerald-600/30 rounded-lg flex items-center gap-2 px-3 border border-emerald-500/50"><i data-lucide="shield-check" class="text-emerald-400 w-4 h-4"></i><span class="text-[10px] font-bold text-emerald-400 hidden md:inline">CLOUD LIVE SYNC</span></div>
+                <h2 class="font-bold text-sm truncate max-w-xs">{{ activeExamBank?.nama }}</h2>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="bg-slate-800 px-5 py-2 rounded-xl flex items-center gap-2"><i data-lucide="timer" class="w-4 h-4 text-amber-400"></i><span class="text-xl font-mono font-black text-amber-400">{{ formattedTime }}</span></div>
+                <button @click="confirmSubmit" class="bg-rose-600 hover:bg-rose-700 px-6 py-2.5 rounded-xl font-bold text-sm">Akhiri</button>
+            </div>
+        </header>
+
+        <div class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+            <main class="flex-1 flex flex-col p-6 overflow-y-auto bg-white m-4 rounded-2xl border">
+                <div v-if="currentQuestion" class="max-w-4xl w-full mx-auto flex-1 flex flex-col h-full">
+                    <div class="flex items-center gap-4 border-b pb-5 mb-8">
+                        <div class="bg-slate-100 font-black text-2xl w-14 h-14 flex items-center justify-center rounded-2xl border-2">{{ currentQuestion.nomor }}</div>
+                        <div><span class="block text-xl font-black text-blue-700">{{ currentQuestion.jenis }}</span></div>
+                    </div>
+                    <div class="text-xl text-slate-800 leading-relaxed mb-10 whitespace-pre-wrap font-medium">{{ currentQuestion.teks }}</div>
+                    <div class="space-y-4 mb-8 flex-1">
+                        <label v-for="(teks, key) in currentQuestion.pilihan" :key="key" class="flex items-start gap-4 p-5 border-2 rounded-xl cursor-pointer" :class="tempAnswer === key ? 'border-blue-600 bg-blue-50' : 'border-slate-200 bg-white'">
+                            <div class="flex items-center h-6 mt-0.5"><div class="w-6 h-6 rounded-full border-2 flex items-center justify-center" :class="tempAnswer === key ? 'border-blue-600' : 'border-slate-300'"><div v-if="tempAnswer === key" class="w-3 h-3 bg-blue-600 rounded-full"></div></div></div>
+                            <input type="radio" :value="key" v-model="tempAnswer" class="hidden">
+                            <span class="font-black text-slate-700 text-lg w-6 shrink-0">{{ key }}.</span>
+                            <span class="text-lg text-slate-700 font-medium">{{ teks }}</span>
+                        </label>
+                    </div>
+                    <div class="flex justify-between items-center pt-6 border-t shrink-0">
+                        <button @click="prevQuestion" :disabled="currentQuestion.nomor === 1" class="px-6 py-3 bg-slate-100 font-bold rounded-xl flex items-center gap-2"><i data-lucide="chevron-left" class="w-5 h-5"></i> Sebelumnya</button>
+                        <div class="flex gap-4">
+                            <button @click="lanjutkanSaja" class="px-6 py-3 bg-white border-2 font-bold rounded-xl">Lewati</button>
+                            <button @click="simpanLanjutkan" class="px-8 py-3 bg-blue-600 text-white font-bold rounded-xl flex items-center gap-2">Simpan & Lanjut <i data-lucide="chevron-right" class="w-5 h-5"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+            <aside class="w-80 bg-white border-l flex flex-col shrink-0 h-auto z-20">
+                <div class="p-5 border-b flex justify-between items-center"><span class="font-black text-sm uppercase">Peta Soal</span><span class="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full font-black">{{ Object.keys(examAnswers).length }}/{{ activeExamBank?.soal.length }}</span></div>
+                <div class="p-5 flex-1 overflow-y-auto">
+                    <div class="grid grid-cols-5 gap-2.5">
+                        <button v-for="n in (activeExamBank?.soal.length || 110)" :key="n" @click="goToQuestion(n)" class="h-10 w-full rounded-lg font-black text-sm border-2 transition-all cursor-pointer" :class="[ currentQuestionNumber === n ? 'ring-2 ring-blue-500' : '', examAnswers[n] ? 'bg-emerald-500 border-emerald-600 text-white' : 'bg-white text-slate-600' ]">{{ n }}</button>
+                    </div>
+                </div>
+            </aside>
+        </div>
+        
+        <div v-if="showSubmitModal" class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+            <div class="bg-white rounded-3xl p-8 max-w-md w-full text-center shadow-2xl">
+                <h3 class="text-2xl font-black mb-3">Akhiri Ujian?</h3>
+                <p class="text-slate-500 font-medium mb-8">Nilai akhir akan keluar. Jika gagal, Token ini tetap Hangus.</p>
+                <div class="flex gap-4">
+                    <button @click="showSubmitModal = false" class="flex-1 py-3.5 bg-slate-100 font-bold rounded-xl">Batal</button>
+                    <button @click="submitExam(false)" class="flex-1 py-3.5 bg-blue-600 text-white font-bold rounded-xl shadow-lg">Ya, Kumpulkan</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div v-if="currentView === 'peserta_result'" class="min-h-screen bg-slate-100 flex flex-col p-4 items-center justify-center">
+        <div class="bg-white rounded-3xl shadow-xl border p-8 max-w-2xl w-full text-center">
+            <h1 class="text-3xl font-black text-slate-800 mb-2">Skor Akhir Simulasi</h1>
+            <div class="p-6 mb-6 rounded-2xl text-white" :class="examResult.isPassed ? 'bg-emerald-600' : 'bg-rose-600'">
+                <h2 class="text-3xl font-black">{{ examResult.isPassed ? 'LULUS AMBANG BATAS' : 'GAGAL' }}</h2>
+                <p class="text-xl font-bold mt-2">Skor Total: {{ examResult.totalScore }}</p>
+            </div>
+            <div class="grid grid-cols-3 gap-4 mb-8">
+                <div class="bg-slate-50 p-4 rounded-xl border"><p class="text-xs font-bold text-slate-400">TWK (Min 65)</p><p class="text-2xl font-black text-blue-600">{{ examResult.twk }}</p></div>
+                <div class="bg-slate-50 p-4 rounded-xl border"><p class="text-xs font-bold text-slate-400">TIU (Min 80)</p><p class="text-2xl font-black text-blue-600">{{ examResult.tiu }}</p></div>
+                <div class="bg-slate-50 p-4 rounded-xl border"><p class="text-xs font-bold text-slate-400">TKP (Min 166)</p><p class="text-2xl font-black text-blue-600">{{ examResult.tkp }}</p></div>
+            </div>
+            <button @click="backToPesertaDashboard" class="w-full py-4 bg-slate-900 text-white font-bold rounded-xl">Kembali ke Beranda</button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
+
+    function shuffleArray(array) {
+        let curId = array.length;
+        while (0 !== curId) { let randId = Math.floor(Math.random() * curId); curId -= 1; let tmp = array[curId]; array[curId] = array[randId]; array[randId] = tmp; }
+        return array;
+    }
+    function shuffleOptions(question) {
+        const keys = ['A', 'B', 'C', 'D', 'E']; const optionsArr = keys.map(k => ({ text: question.pilihan[k], bobot: question.bobot[k] }));
+        shuffleArray(optionsArr); const newPilihan = {}; const newBobot = {};
+        keys.forEach((k, index) => { newPilihan[k] = optionsArr[index].text; newBobot[k] = optionsArr[index].bobot; });
+        return { ...question, pilihan: newPilihan, bobot: newBobot };
+    }
+    function generateShuffledExam(originalSoal) {
+        const processedSoal = originalSoal.map(s => shuffleOptions(s));
+        const twk = processedSoal.filter(s => s.jenis === 'TWK'); const tiu = processedSoal.filter(s => s.jenis === 'TIU'); const tkp = processedSoal.filter(s => s.jenis === 'TKP');
+        shuffleArray(twk); shuffleArray(tiu); shuffleArray(tkp);
+        return [...twk, ...tiu, ...tkp].map((s, index) => ({ ...s, nomor: index + 1 }));
+    }
+
+    createApp({
+        setup() {
+            const db = ref({ users: [], tokens: [], bankSoal: [] });
+            
+            const currentView = ref('auth'); const authRole = ref('peserta'); const authMode = ref('login'); 
+            const currentUser = ref(null); const currentSessionId = ref(''); 
+            const authForm = ref({ email: '', password: '', mfa: '' }); const regForm = ref({ nama: '', wa: '', email: '', password: '' });
+            const forgotEmail = ref(''); const profileForm = ref({ oldPass: '', newPass: '' });
+            const toast = ref({ show: false, message: '', type: 'success' }); const isSidebarOpen = ref(false);
+
+            const adminMenu = ref('dashboard'); const activeBankSoal = ref(null); const formSoal = ref(null); const isEditing = ref(false);
+            const expandedUser = ref(null); const pesertaMenu = ref('beranda'); const showTokenModal = ref(false); const inputToken = ref('');
+            
+            const activeBankForToken = ref(null); const activeExamBank = ref(null); const currentQuestionNumber = ref(1);
+            const examAnswers = ref({}); const tempAnswer = ref(null); const timeLeft = ref(0); let timerInterval = null;
+            const cheatCount = ref(0); const showSubmitModal = ref(false); const examResult = ref({});
+            const usedTokenCode = ref(''); const currentQuestion = ref(null);
+
+            const seedAdmins = () => {
+                if(!db.value.users.find(u => u.email === 'aldyraenaldy@gmail.com')) { db.value.users.push({ email: 'aldyraenaldy@gmail.com', password: 'password123', role: 'admin', nama: 'Admin 1' }); }
+                if(!db.value.users.find(u => u.email === 'filealdy23@gmail.com')) { db.value.users.push({ email: 'filealdy23@gmail.com', password: 'password123', role: 'admin', nama: 'Admin 2' }); }
+            };
+
+            const calculateKategoriDanBobot = (nomor) => {
+                let jenis = 'TWK'; let bobot = { A:5, B:0, C:0, D:0, E:0 };
+                if (nomor >= 31 && nomor <= 65) { jenis = 'TIU'; } else if (nomor >= 66 && nomor <= 110) { jenis = 'TKP'; bobot = { A:1, B:2, C:3, D:4, E:5 }; }
+                return { jenis, bobot };
+            };
+            const nextAvailableNumber = computed(() => {
+                if (!activeBankSoal.value) return 1;
+                const existing = activeBankSoal.value.soal.map(s => s.nomor);
+                for (let i = 1; i <= 110; i++) { if (!existing.includes(i)) return i; } return null;
+            });
+            const generateFormKosong = () => {
+                const no = nextAvailableNumber.value;
+                if (no !== null) { const { jenis, bobot } = calculateKategoriDanBobot(no); formSoal.value = { nomor: no, jenis: jenis, teks: '', pilihan: {A:'', B:'', C:'', D:'', E:''}, bobot: bobot }; isEditing.value = false;
+                } else { formSoal.value = null; }
+            };
+
+            // ==========================================================
+            // UPDATE UTAMA V11: INTEGRASI SINKRONISASI CLOUD API MONGODB
+            // ==========================================================
+            const loadAppStates = async () => {
+                try {
+                    // Ketuk pintu API Node.js untuk mengambil data dari MongoDB Cloud
+                    const res = await fetch('/api/database');
+                    const cloudData = await res.json();
+                    if (cloudData && (cloudData.bankSoal || cloudData.users)) {
+                        db.value.users = cloudData.users || [];
+                        db.value.tokens = cloudData.tokens || [];
+                        db.value.bankSoal = cloudData.bankSoal || [];
+                    }
+                } catch (err) {
+                    console.error("Gagal mengambil data dari MongoDB, memuat cadangan lokal:", err);
+                    let savedDB = localStorage.getItem('cpnsDB_v10');
+                    if (savedDB) db.value = JSON.parse(savedDB);
+                }
+                
+                seedAdmins(); // Pastikan akun admin utama Anda selalu tertanam aman
+
+                // Pemulihan data sesi login (sangat cocok disimpan di lokal tab browser)
+                const savedSess = localStorage.getItem('cpnsSession_v10');
+                if (savedSess) {
+                    const sess = JSON.parse(savedSess);
+                    currentView.value = sess.currentView || 'auth'; currentUser.value = sess.currentUser;
+                    authRole.value = sess.authRole || 'peserta'; adminMenu.value = sess.adminMenu || 'dashboard';
+                    currentSessionId.value = sess.currentSessionId || '';
+                    
+                    if (sess.activeBankSoalId && db.value.bankSoal) {
+                        activeBankSoal.value = db.value.bankSoal.find(b => b.id === sess.activeBankSoalId) || null;
+                        if (sess.formSoal && activeBankSoal.value) { formSoal.value = sess.formSoal; isEditing.value = sess.isEditing || false; } 
+                        else if (activeBankSoal.value) { generateFormKosong(); }
+                    }
+                    pesertaMenu.value = sess.pesertaMenu || 'beranda';
+                    
+                    if (currentView.value === 'peserta_exam' && sess.examState) {
+                        const b = db.value.bankSoal.find(bank => bank.id === sess.examState.activeBankId);
+                        const tRecord = db.value.tokens.find(tok => tok.code === sess.examState.token);
+                        if (b && tRecord && tRecord.sessionData?.shuffledSoal) {
+                            activeExamBank.value = { ...b, soal: tRecord.sessionData.shuffledSoal }; usedTokenCode.value = sess.examState.token; examAnswers.value = sess.examState.answers || {}; 
+                            timeLeft.value = sess.examState.timeLeft || 0; currentQuestionNumber.value = sess.examState.currentQuestionNumber || 1; 
+                            cheatCount.value = sess.examState.cheatCount || 0; loadQuestion(currentQuestionNumber.value); startTimer();
+                        } else { currentView.value = 'peserta_dashboard'; }
+                    }
+                }
+            };
+
+            const saveDB = async () => {
+                // Cadangan lokal di browser tetap disimpan sebagai tindakan preventif
+                localStorage.setItem('cpnsDB_v10', JSON.stringify(db.value));
+                
+                // Dorong data secara Real-time ke Cloud MongoDB via API POST
+                try {
+                    await fetch('/api/database', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            users: db.value.users,
+                            tokens: db.value.tokens,
+                            bankSoal: db.value.bankSoal
+                        })
+                    });
+                } catch (err) {
+                    console.error("Gagal sinkronisasi data ke Cloud MongoDB:", err);
+                }
+            };
+
+            const saveSessionToLocal = () => {
+                const state = {
+                    currentView: currentView.value, currentUser: currentUser.value, currentSessionId: currentSessionId.value,
+                    authRole: authRole.value, adminMenu: adminMenu.value, activeBankSoalId: activeBankSoal.value?.id || null, 
+                    formSoal: formSoal.value, isEditing: isEditing.value, pesertaMenu: pesertaMenu.value,
+                    examState: { activeBankId: activeExamBank.value?.id || null, token: usedTokenCode.value, answers: examAnswers.value, timeLeft: timeLeft.value, currentQuestionNumber: currentQuestionNumber.value, cheatCount: cheatCount.value }
+                };
+                localStorage.setItem('cpnsSession_v10', JSON.stringify(state));
+            };
+
+            watch([ currentView, currentUser, authRole, adminMenu, activeBankSoal, formSoal, isEditing, pesertaMenu, activeExamBank, usedTokenCode, examAnswers, timeLeft, currentQuestionNumber, cheatCount ], () => { saveSessionToLocal(); }, { deep: true });
+
+            onMounted(async () => {
+                await loadAppStates();
+                document.addEventListener('visibilitychange', handleVisibilityChange);
+                document.addEventListener('contextmenu', e => { if (currentView.value === 'peserta_exam') e.preventDefault(); });
+                updateIcons();
+                window.addEventListener('storage', (e) => {
+                    if (e.key === 'cpnsDB_v10' && currentUser.value) {
+                        const newDb = JSON.parse(e.newValue); const me = newDb.users.find(u => u.email === currentUser.value.email);
+                        if (me && me.sessionId !== currentSessionId.value) { forceLogout('Akun Anda baru saja Login di perangkat/tab lain!'); }
+                    }
+                });
+            });
+
+            const showToast = (msg, type = 'success') => { toast.value = { show: true, message: msg, type }; setTimeout(() => toast.value.show = false, 3000); };
+            const updateIcons = () => nextTick(() => { if (window.lucide) lucide.createIcons(); });
+
+            const exportPesertaCSV = () => {
+                let csv = "Nama Lengkap,Email,No WA,Password Akun,Total Token Dibeli,Total Ujian Diselesaikan,Rata-Rata Skor\n";
+                tablePeserta.value.forEach(u => { csv += `"${u.nama || ''}","${u.email}","${u.wa || ''}","${u.password}","${u.purchasedCount}","${u.usedCount}","${u.avgScore || 0}"\n`; });
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = `Data_Peserta_CPNS_${new Date().toISOString().split('T')[0]}.csv`;
+                document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+                showToast('Data Peserta (CSV) Berhasil Diunduh!');
+            };
+
+            const exportDatabase = () => {
+                const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(db.value)], { type: 'application/json' })); 
+                a.download = `Backup_CLOUD_CPNS_${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a); a.click(); document.body.removeChild(a); showToast('Backup JSON Sukses Diunduh!');
+            };
+            const importDatabase = (event) => {
+                const file = event.target.files[0]; if (!file) return; const reader = new FileReader();
+                reader.onload = async (e) => {
+                    try {
+                        const importedData = JSON.parse(e.target.result);
+                        if (importedData && importedData.bankSoal && importedData.users) { 
+                            db.value = importedData; 
+                            await saveDB(); // Memicu pengunggahan instan ke Cloud MongoDB!
+                            showToast('Data Berhasil Diunggah ke Cloud MongoDB!'); 
+                            setTimeout(() => { window.location.reload(); }, 1500);
+                        } else { showToast('File JSON tidak valid!', 'error'); }
+                    } catch (error) { showToast('Gagal membaca file', 'error'); }
+                }; reader.readAsText(file);
+            };
+
+            const handleLogin = () => {
+                const { email, password, mfa } = authForm.value;
+                let user = db.value.users.find(u => u.email === email && u.role === authRole.value);
+                if (!user) return showToast('Email tidak terdaftar.', 'error');
+                if (user.password !== password) return showToast('Kata Sandi Salah!', 'error');
+                if (authRole.value === 'admin') { if (mfa !== '123456') return showToast('Kode MFA Salah!', 'error'); }
+                
+                const sid = Math.random().toString(36).substring(2); user.sessionId = sid; currentSessionId.value = sid; saveDB();
+                currentUser.value = user;
+                if(user.role === 'admin') { currentView.value = 'admin'; adminMenu.value = 'dashboard'; } else { currentView.value = 'peserta_dashboard'; pesertaMenu.value = 'beranda'; }
+                updateIcons();
+            };
+
+            const handleRegister = () => {
+                const { email, password, nama, wa } = regForm.value;
+                if (db.value.users.find(u => u.email === email)) return showToast('Email sudah terdaftar!', 'error');
+                const sid = Math.random().toString(36).substring(2);
+                const newUser = { email, password, nama, wa, role: 'peserta', sessionId: sid };
+                db.value.users.push(newUser); saveDB();
+                currentUser.value = newUser; currentSessionId.value = sid; currentView.value = 'peserta_dashboard'; pesertaMenu.value = 'beranda';
+                showToast('Pendaftaran Berhasil!'); updateIcons();
+            };
+
+            // =======================================================
+            // NEW API LOGIC: LUPA PASSWORD TERHUBUNG KE NODE.JS EMAIL
+            // =======================================================
+            const handleForgotPassword = async () => {
+                try {
+                    const res = await fetch('/api/auth/lupa-password', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: forgotEmail.value })
+                    });
+                    
+                    if (res.status === 444) {
+                        return showToast('Email tidak terdaftar di database peserta.', 'error');
+                    }
+                    
+                    const result = await res.json();
+                    db.value.users = result.db.users; // Sinkronisasi akun terbaru
+                    
+                    showToast(`Password sementara berhasil dikirim ke email: ${forgotEmail.value}`, 'success');
+                    authMode.value = 'login';
+                    authForm.value.email = forgotEmail.value;
+                    forgotEmail.value = '';
+                } catch (err) {
+                    showToast('Gagal memproses permintaan reset password', 'error');
+                }
+            };
+
+            const changePassword = () => {
+                const user = db.value.users.find(u => u.email === currentUser.value.email);
+                if (user.password !== profileForm.value.oldPass) return showToast('Password Lama Salah!', 'error');
+                user.password = profileForm.value.newPass; saveDB();
+                profileForm.value = { oldPass: '', newPass: '' }; showToast('Password Berhasil Diubah!');
+            };
+
+            const forceLogout = (msg) => { alert(msg); clearInterval(timerInterval); currentUser.value = null; currentView.value = 'auth'; authForm.value = { email: '', password: '', mfa: '' }; activeExamBank.value = null; localStorage.removeItem('cpnsSession_v10'); updateIcons(); };
+            const logout = () => { clearInterval(timerInterval); currentUser.value = null; currentView.value = 'auth'; authForm.value = { email: '', password: '', mfa: '' }; activeExamBank.value = null; localStorage.removeItem('cpnsSession_v10'); updateIcons(); };
+
+            const getBankName = (id) => { const b = db.value.bankSoal.find(x=>x.id === id); return b ? b.nama : 'Modul Terhapus'; };
+            const statsAdmin = computed(() => { const p = db.value.users.filter(u=>u.role==='peserta').length; const c = db.value.tokens.filter(t=>t.status==='used'); return { totalPeserta: p, totalUjian: c.length, passRate: c.length ? Math.round((c.filter(t=>t.result?.isPassed).length/c.length)*100) : 0 }; });
+            const tablePeserta = computed(() => db.value.users.filter(u=>u.role==='peserta').map(u => { const userTokens = db.value.tokens.filter(t=>t.usedBy === u.email); const usedTokens = userTokens.filter(t=>t.status === 'used'); const avg = usedTokens.length ? Math.round(usedTokens.reduce((a,c)=>a+c.result.totalScore,0)/usedTokens.length) : 0; return { ...u, tokens: userTokens, purchasedCount: userTokens.length, usedCount: usedTokens.length, avgScore: avg }; }));
+
+            const createNewBankSoal = () => { const id = 'BANK-' + Math.floor(Math.random() * 9000); db.value.bankSoal.push({ id, nama: 'Bank Soal Baru', waktu: 100, soal: [], status: 'draft' }); saveDB(); openBankSoal(id); };
+            const openBankSoal = (id) => { activeBankSoal.value = db.value.bankSoal.find(b => b.id === id); generateFormKosong(); updateIcons(); };
+            const setBankStatus = (status) => { if(activeBankSoal.value) { activeBankSoal.value.status = status; saveDB(); showToast(status === 'published' ? 'Bank Soal dipublish!' : 'Status diubah ke Draft.'); } };
+            const simpanSoal = () => {
+                if(!formSoal.value.teks) return showToast('Teks pertanyaan wajib diisi!', 'error');
+                const idx = activeBankSoal.value.soal.findIndex(s => s.nomor === formSoal.value.nomor); const data = JSON.parse(JSON.stringify(formSoal.value));
+                if(idx >= 0) activeBankSoal.value.soal[idx] = data; else activeBankSoal.value.soal.push(data);
+                saveDB(); showToast(`Soal No.${data.nomor} Tersimpan!`); generateFormKosong(); updateIcons();
+            };
+            const editSoal = (s) => { formSoal.value = JSON.parse(JSON.stringify(s)); isEditing.value = true; setTimeout(() => { const scrollArea = document.getElementById('adminScrollArea'); if (scrollArea) scrollArea.scrollTo({top: 0, behavior: 'smooth'}); }, 50); };
+            const batalEdit = () => { generateFormKosong(); };
+            const hapusSoal = (no) => { activeBankSoal.value.soal = activeBankSoal.value.soal.filter(s => s.nomor !== no); saveDB(); if(isEditing.value && formSoal.value.nomor === no) generateFormKosong(); };
+            const sortedSoal = computed(() => activeBankSoal.value ? activeBankSoal.value.soal.slice().sort((a,b)=>a.nomor-b.nomor) : []);
+
+            const publishedBanks = computed(() => db.value.bankSoal.filter(b=>b.status === 'published'));
+            const myUsedTokens = computed(() => db.value.tokens.filter(t=>t.usedBy === currentUser.value?.email && t.status==='used'));
+            const myUnusedTokens = computed(() => db.value.tokens.filter(t=>t.usedBy === currentUser.value?.email && t.status==='unused'));
+            const availableTokensCount = computed(() => myUnusedTokens.value.length);
+            const statsPeserta = computed(() => { const t = myUsedTokens.value; return { totalExams: t.length, bestScore: t.length ? Math.max(...t.map(e=>e.result.totalScore)) : 0 }; });
+
+            // =======================================================
+            // NEW API LOGIC: SIMULASI PEMBAYARAN KE NODE.JS EMAIL
+            // =======================================================
+            const simulatePayment = async () => {
+                try {
+                    // Panggil API Backend untuk generate token dan kirim email asli
+                    const res = await fetch('/api/pembayaran/simulasi', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: currentUser.value.email })
+                    });
+                    const result = await res.json();
+                    
+                    // Update database di sisi frontend secara instan dengan data cloud terbaru
+                    db.value.tokens = result.db.tokens;
+                    db.value.users = result.db.users;
+                    
+                    showToast(`Pembayaran Sukses! Token ${result.tokenBaru} telah dikirim ke email Anda.`);
+                    inputToken.value = result.tokenBaru;
+                } catch (err) {
+                    showToast('Koneksi server gagal', 'error');
+                }
+            };
+
+            const openTokenModal = (bank) => { activeBankForToken.value = bank; inputToken.value = ''; if (myUnusedTokens.value.length > 0) { inputToken.value = myUnusedTokens.value[0].code; } showTokenModal.value = true; updateIcons(); };
+            const aksesUjian = () => {
+                const t = db.value.tokens.find(x => x.code === inputToken.value.toUpperCase());
+                if(!t) return showToast('Token Tidak Ditemukan!', 'error');
+                if(t.usedBy && t.usedBy !== currentUser.value.email) return showToast('Token ini milik pengguna lain!', 'error');
+                if (t.status === 'unused' && !t.bankSoalId) { t.bankSoalId = activeBankForToken.value.id; saveDB(); } 
+                else if (t.bankSoalId !== activeBankForToken.value.id) { return showToast('Token sudah terikat modul lain!', 'error'); }
+
+                if(t.status === 'used') { examResult.value = t.result; usedTokenCode.value = t.code; showTokenModal.value = false; currentView.value = 'peserta_result'; return; }
+                const b = db.value.bankSoal.find(x => x.id === t.bankSoalId);
+                if (!t.sessionData || !t.sessionData.shuffledSoal) { const shuffled = generateShuffledExam(b.soal); if (!t.sessionData) t.sessionData = {}; t.sessionData.shuffledSoal = shuffled; saveDB(); }
+                showTokenModal.value = false; usedTokenCode.value = t.code; activeExamBank.value = { ...b, whitesoal: b.soal, soal: t.sessionData.shuffledSoal };
+                examAnswers.value = {}; cheatCount.value = 0; timeLeft.value = b.waktu * 60; loadQuestion(1); startTimer(); currentView.value = 'peserta_exam'; updateIcons();
+            };
+
+            const loadQuestion = (no) => { currentQuestionNumber.value = no; currentQuestion.value = activeExamBank.value?.soal.find(s => s.nomor === no) || null; tempAnswer.value = examAnswers.value[no] || null; updateIcons(); };
+            const goToQuestion = (no) => { if(activeExamBank.value.soal.find(s=>s.nomor===no)) loadQuestion(no); };
+            const simpanLanjutkan = () => { if(tempAnswer.value) examAnswers.value[currentQuestionNumber.value] = tempAnswer.value; nextQuestion(); };
+            const lanjutkanSaja = () => nextQuestion();
+            const nextQuestion = () => { let n = currentQuestionNumber.value+1; while(n<=activeExamBank.value.soal.length && !activeExamBank.value.soal.find(s=>s.nomor===n)) n++; if(n<=activeExamBank.value.soal.length) loadQuestion(n); };
+            const prevQuestion = () => { let n = currentQuestionNumber.value-1; while(n>=1 && !activeExamBank.value.soal.find(s=>s.nomor===n)) n--; if(n>=1) loadQuestion(n); };
+            const confirmSubmit = () => showSubmitModal.value = true;
+            
+            const abortExamDueToCheating = () => {
+                clearInterval(timerInterval); document.getElementById('cheatWarning').style.display = 'none';
+                const t = db.value.tokens.find(x => x.code === usedTokenCode.value); if (t) { t.sessionData = null; saveDB(); }
+                activeExamBank.value = null; examAnswers.value = {}; currentView.value = 'peserta_dashboard'; pesertaMenu.value = 'beranda';
+                showToast('Kecurangan terdeteksi! Token dikembalikan.', 'error'); updateIcons();
+            };
+            const handleVisibilityChange = () => { if (document.hidden && currentView.value === 'peserta_exam') { cheatCount.value++; document.getElementById('cheatWarning').style.display = 'flex'; if (cheatCount.value >= 3) { abortExamDueToCheating(); } } };
+            const dismissCheatWarning = () => document.getElementById('cheatWarning').style.display = 'none';
+
+            const submitExam = () => {
+                showSubmitModal.value = false; clearInterval(timerInterval); document.getElementById('cheatWarning').style.display = 'none';
+                let twk=0, tiu=0, tkp=0;
+                activeExamBank.value.soal.forEach(s => { const a = examAnswers.value[s.nomor]; if(a) { const p = s.bobot[a]||0; if(s.jenis==='TWK') twk+=p; else if(s.jenis==='TIU') tiu+=p; else tkp+=p; } });
+                examResult.value = { twk, tiu, tkp, totalScore: twk+tiu+tkp, isPassed: (twk>=65 && tiu>=80 && tkp>=166) };
+                const t = db.value.tokens.find(x => x.code === usedTokenCode.value); 
+                if(t) { t.status = 'used'; t.result = examResult.value; t.usedAt = new Date().toISOString(); saveDB(); }
+                activeExamBank.value = null; examAnswers.value = {}; currentView.value = 'peserta_result'; updateIcons();
+            };
+
+            const startTimer = () => { clearInterval(timerInterval); timerInterval = setInterval(() => { if(timeLeft.value > 0) timeLeft.value--; else submitExam(); }, 1000); };
+            const formattedTime = computed(() => { const h = Math.floor(timeLeft.value/3600); const m = Math.floor((timeLeft.value%3600)/60); const s = timeLeft.value%60; return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`; });
+            const backToPesertaDashboard = () => { currentView.value = 'peserta_dashboard'; pesertaMenu.value = 'riwayat'; updateIcons(); };
+
+            return {
+                db, currentView, authRole, authMode, authForm, regForm, forgotEmail, profileForm, currentUser, handleLogin, handleRegister, handleForgotPassword, changePassword, logout, toast, isSidebarOpen,
+                adminMenu, statsAdmin, tablePeserta, activeBankSoal, createNewBankSoal, openBankSoal, setBankStatus, expandedUser,
+                formSoal, isEditing, simpanSoal, hapusSoal, editSoal, batalEdit, sortedSoal,
+                exportDatabase, importDatabase, exportPesertaCSV,
+                pesertaMenu, publishedBanks, myUsedTokens, myUnusedTokens, availableTokensCount, getBankName, statsPeserta, 
+                simulatePayment, showTokenModal, inputToken, activeBankForToken, openTokenModal, aksesUjian,
+                activeExamBank, currentQuestion, examAnswers, tempAnswer, currentQuestionNumber, goToQuestion, simpanLanjutkan, lanjutkanSaja, prevQuestion,
+                formattedTime, confirmSubmit, showSubmitModal, submitExam, examResult, usedTokenCode, backToPesertaDashboard, cheatCount, dismissCheatWarning
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
