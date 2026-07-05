@@ -40,12 +40,12 @@
                 <div class="bg-gradient-to-tr from-blue-600 to-indigo-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/30">
                     <i data-lucide="laptop" class="text-white w-8 h-8"></i>
                 </div>
-                <h1 class="text-2xl font-extrabold text-slate-800">Portal CPNS 2026</h1>
-                <p class="text-sm text-slate-500 font-medium mt-1">Platform CAT Terintegrasi BKN</p>
+                <h1 class="text-2xl font-extrabold text-slate-800">PORTAL TRYOUT CPNS</h1>
+                <p class="text-sm text-slate-500 font-medium mt-1">Platform Tryout CPNS CAT based</p>
             </div>
 
             <div v-if="authMode !== 'forgot'" class="flex bg-slate-100 p-1.5 rounded-xl mb-6">
-                <button @click="authRole = 'peserta'; authMode = 'login'" :class="authRole === 'peserta' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'" class="flex-1 py-2.5 text-sm font-bold rounded-lg transition-all">Siswa / Peserta</button>
+                <button @click="authRole = 'peserta'; authMode = 'login'" :class="authRole === 'peserta' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'" class="flex-1 py-2.5 text-sm font-bold rounded-lg transition-all">Peserta</button>
                 <button @click="authRole = 'admin'; authMode = 'login'" :class="authRole === 'admin' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'" class="flex-1 py-2.5 text-sm font-bold rounded-lg transition-all">Administrator</button>
             </div>
 
